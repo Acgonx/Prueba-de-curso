@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Chat } from "@google/genai";
 import type { GenerateContentResponse } from "@google/genai";
@@ -14,7 +13,7 @@ const Chatbot: React.FC = () => {
     {
       id: 'initial',
       sender: 'bot',
-      text: '¡Hola! Soy tu asistente de IA. ¿Cómo puedo ayudarte a aprender hoy?',
+      content: '¡Hola! Soy tu asistente de IA. ¿Cómo puedo ayudarte a aprender hoy?',
     },
   ]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -33,7 +32,7 @@ const Chatbot: React.FC = () => {
         });
       } catch (error) {
         console.error("Error initializing Gemini:", error);
-        setMessages(prev => [...prev, {id: 'error-init', sender: 'bot', text: 'Lo siento, no pude conectarme con mi cerebro. Por favor, verifica la configuración.'}]);
+        setMessages(prev => [...prev, {id: 'error-init', sender: 'bot', content: 'Lo siento, no pude conectarme con mi cerebro. Por favor, verifica la configuración.'}]);
       }
     }
   }, [isOpen]);
@@ -49,11 +48,29 @@ const Chatbot: React.FC = () => {
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       sender: 'user',
-      text: inputMessage,
+      content: inputMessage,
     };
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
+    
     setIsLoading(true);
+    setInputMessage('');
+    
+    const botMessageId = Date.now().toString() + '-bot';
+    
+    const BotLoadingIndicator = () => (
+        <div className="flex items-center space-x-2 py-2">
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-bounce"></span>
+        </div>
+    );
+    
+    const botLoadingMessage: ChatMessage = {
+        id: botMessageId,
+        sender: 'bot',
+        content: <BotLoadingIndicator />,
+    };
+
+    setMessages(prev => [...prev, userMessage, botLoadingMessage]);
 
     try {
         if (!chatRef.current) {
@@ -63,29 +80,21 @@ const Chatbot: React.FC = () => {
         const stream = await chatRef.current.sendMessageStream({ message: inputMessage });
         
         let botResponseText = '';
-        const botMessageId = Date.now().toString() + '-bot';
         
-        // Add a placeholder message for the bot
-        setMessages(prev => [...prev, { id: botMessageId, sender: 'bot', text: '...' }]);
-
         for await (const chunk of stream) {
             const c = chunk as GenerateContentResponse;
             botResponseText += c.text;
             
-            // Update the bot's message in the list
             setMessages(prev => prev.map(msg => 
-                msg.id === botMessageId ? { ...msg, text: botResponseText + '...' } : msg
+                msg.id === botMessageId ? { ...msg, content: botResponseText } : msg
             ));
         }
-        
-        // Final update to remove the ellipsis
-        setMessages(prev => prev.map(msg => 
-            msg.id === botMessageId ? { ...msg, text: botResponseText } : msg
-        ));
 
     } catch (error) {
         console.error("Error sending message:", error);
-        setMessages(prev => [...prev, {id: 'error-send', sender: 'bot', text: 'Uups, algo salió mal. Por favor, intenta de nuevo.'}]);
+        setMessages(prev => prev.map(msg => 
+            msg.id === botMessageId ? { ...msg, content: 'Uups, algo salió mal. Por favor, intenta de nuevo.'} : msg
+        ));
     } finally {
         setIsLoading(false);
     }
@@ -119,21 +128,13 @@ const Chatbot: React.FC = () => {
                         ? 'bg-blue-500 text-white rounded-br-none'
                         : 'bg-gray-200 text-gray-800 rounded-bl-none'
                     }`}>
-                    <p style={{whiteSpace: "pre-wrap"}}>{message.text}</p>
+                    {typeof message.content === 'string' ? 
+                        <p style={{whiteSpace: "pre-wrap"}}>{message.content}</p> : 
+                        message.content
+                    }
                   </div>
                 </div>
               ))}
-              {isLoading && (
-                 <div className="flex justify-start">
-                  <div className="px-4 py-3 rounded-2xl bg-gray-200 text-gray-800 rounded-bl-none">
-                    <div className="flex items-center space-x-2">
-                        <span className="h-2 w-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                        <span className="h-2 w-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                        <span className="h-2 w-2 bg-gray-500 rounded-full animate-bounce"></span>
-                    </div>
-                  </div>
-                </div>
-              )}
               <div ref={messagesEndRef} />
             </div>
           </div>
